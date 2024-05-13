@@ -1,0 +1,23 @@
+version: '3.9'
+name: 'robocup_pkg'
+
+services:
+  scene:
+    image: robocup-pkg:latest
+    container_name: robocup_pkg
+    command: bash
+    build:
+      context: ./
+    environment:
+      - DISPLAY
+      - XAUTORITY
+      - QT_X11_NO_MITSHM=1
+    ipc: host
+    stdin_open: true
+    tty: true
+    network_mode: host
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /dev:/dev
+      - ./:/catkin_ws/src/
