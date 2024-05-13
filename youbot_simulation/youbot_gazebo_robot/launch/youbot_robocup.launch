@@ -10,9 +10,8 @@
   <!-- launch world -->
   <include file="$(find youbot_gazebo_worlds)/launch/$(arg world).launch" />
 
-  <param name="robot_description" command="$(find xacro)/xacro.py $(find youbot_description)/robots/$(arg robot).urdf.xacro" />
+  <param name="robot_description" command="$(find xacro)/xacro $(find youbot_description)/robots/$(arg robot).urdf.xacro" />
   <param name="world_description" command="$(find xacro)/xacro --inorder $(find youbot_gazebo_worlds)/urdf/robocup.urdf" />
-
   <node pkg="gazebo_ros" type="spawn_model" name="spawn_robot" respawn="false" output="screen"
     args="-param robot_description
           -urdf
