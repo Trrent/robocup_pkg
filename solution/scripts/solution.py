@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 import sys
-
 import rospy
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
-
-
+from sensor_msgs.msg import JointState
 import numpy as np
-from math import cos, sin, pi
+from math import cos, sin, pi, radians
 
+# Parameters
 l = [0.033, 0.155, 0.3524]
 alpha = [pi / 2, 0, 0]
 d = [0.147, 0, 0]
-q = [pi * 169.0 / 180.0, pi * 65.0 / 180.0 + pi / 2, -pi * 146.0 / 180.0]
+q = [0, 0, 0]
+q_deviation = np.array([pi * 169.0 / 180.0, pi * 65.0 / 180.0 + pi / 2, -pi * 146.0 / 180.0, pi * 102.5 / 180.0, pi * 167.5 / 180.0])
 
 
 def get_transform_matrix(a, alpha, d, theta):
@@ -48,24 +48,25 @@ def find_pos(q):
     return pos
 
 
-def get_angles(x, y, z):
-    global q
-    prev_coord = np.array(find_pos(q))
+def get_angles(prev_angles, x, y, z):
+    prev_coord = np.array(find_pos(prev_angles[:3]))
     next_coord = np.array([x, y, z])
     for i in range(10):
-        q = q + np.linalg.pinv(find_jacob_matrix(q)) @ (next_coord - prev_coord)
-    q = [pi * q[0] / 180.0, pi * q[1] / 180.0, pi * q[2] / 180.0, 0, 0]
-    return q
+        prev_angles = prev_angles + np.linalg.pinv(find_jacob_matrix(prev_angles)) @ (next_coord - prev_coord)
+        prev_coord = np.array(find_pos(prev_angles))
+    prev_angles = np.append([i % (2 * pi) for i in prev_angles], [radians(102.5), radians(167.5)])
+    # q = [-round(i, 2) for i in prev_angles]
+    # prev_angles = np.array([q[0] + q_deviation[0], q[1] + q_deviation[1], q[2] + q_deviation[2], q_deviation[3], q_deviation[4]])
+    return prev_angles
 
 
-def make_trajectory_msg(joint_trajectory_plan=[], seq=0, secs=0, nsecs=0, dt=2, frame_id='/base_link'):
+def make_trajectory_msg(joint_trajectory_plan):
     jt = JointTrajectory()
-    jt.header.seq = seq
+    jt.header.seq = 0
     jt.header.stamp.secs = 0  # secs
     jt.header.stamp.nsecs = 0  # nsecs
-    jt.header.frame_id = frame_id
+    jt.header.frame_id = '/base_link'
     jt.joint_names = [f"arm_joint_{i}" for i in range(1, 6)]
-    njtp = 1
     point = JointTrajectoryPoint()
     point.positions = joint_trajectory_plan
     point.time_from_start = rospy.Duration(1)
@@ -74,23 +75,35 @@ def make_trajectory_msg(joint_trajectory_plan=[], seq=0, secs=0, nsecs=0, dt=2, 
 
 
 def move_robot():
+    global q
     rospy.init_node('solution', anonymous=False)
 
     gazebo_command_publisher = rospy.Publisher('/arm_1/arm_controller/command', JointTrajectory, queue_size=10)
+    rospy.Subscriber('/joint_states', JointState, update_position)
     r = rospy.Rate(10)
-    angles = get_angles(*[10, 0, 0])
-    # angles = [0, 0, 0, 0, 0]
-    jt = make_trajectory_msg(joint_trajectory_plan=angles, dt=0.2, frame_id='base_link')
+
+    # coord = find_pos([0, pi / 2, 0]) # x, y, z
+    # q, angles = get_angles(q, coord[0], coord[1], coord[2])
+    # print(q)
+    # print(angles)
+    #
+    # jt = make_trajectory_msg(joint_trajectory_plan=angles)
+    # gazebo_command_publisher.publish(jt)
 
     while not rospy.is_shutdown():
-        gazebo_command_publisher.publish(jt)
-        print(angles)
-        r.sleep()
-
+        try:
+            coord = find_pos([pi * int(i) / 180 for i in input().split()])
+            # coord = [float(i) for i in input().split()]
+            q, angles = get_angles(q, coord[0], coord[1], coord[2])
+            print(q)
+            print(angles)
+            jt = make_trajectory_msg(joint_trajectory_plan=angles)
+            gazebo_command_publisher.publish(jt)
+            r.sleep()
+        except Exception as e:
+            print(e)
+            pass
 
 
 if __name__ == '__main__':
-    try:
-        move_robot()
-    except rospy.ROSInterruptException:
-        print("Program interrupted before completion.", file=sys.stderr)
+    move_robot()
